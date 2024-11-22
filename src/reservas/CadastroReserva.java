@@ -1,14 +1,24 @@
 package reservas;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.Comparator;
+import enums.Categoria;
 import enums.Cor;
 import nodo.Cliente;
 
 public class CadastroReserva {
     private Cliente raiz;
+    private Cliente raizHistorico;
+    private List<Quarto> todosQuartos;
+    private static final double TAXA_OCUPACAO_LIMITE = 0.9;
 
-    public CadastroReserva() {
+    public CadastroReserva(List<Quarto> quartos) {
         raiz = null;
+        raizHistorico = null;
+        this.todosQuartos = quartos;
     }
 
     public void inserir(int cpf, Quarto quarto, String nome, LocalDate checkIn, LocalDate checkOut) {
@@ -19,6 +29,30 @@ public class CadastroReserva {
         Cliente novoNodo = new Cliente(cpf, quarto, nome, checkIn, checkOut);
         raiz = inserirNodo(raiz, novoNodo);
         corrigirInserir(novoNodo);
+        
+     // Verifica a taxa de ocupação após inserir a reserva
+        verificarTaxaOcupacao();
+    }
+    
+    public void verificarTaxaOcupacao() {
+        // Calcula o número total de quartos ocupados
+        long quartosOcupados = todosQuartos.stream()
+            .filter(this::quartoEstaOcupado)
+            .count();
+
+        // Calcula a taxa de ocupação
+        double taxaOcupacao = (double) quartosOcupados / todosQuartos.size();
+
+        // Verifica se a taxa de ocupação excede o limite
+        if (taxaOcupacao >= TAXA_OCUPACAO_LIMITE) {
+            System.out.println("ALERTA: Taxa de ocupação atingiu " + (taxaOcupacao * 100) + "%.");
+        } else {
+            System.out.println("Taxa de ocupação atual: " + (taxaOcupacao * 100) + "%.");
+        }
+    }
+
+    private boolean quartoEstaOcupado(Quarto quarto) {
+        return !verificarDisponibilidade(quarto, LocalDate.now(), LocalDate.now().plusDays(1));
     }
 
 
@@ -47,7 +81,7 @@ public class CadastroReserva {
         if (atual == null) {
             return novoNodo;
         }
-
+        
         if (novoNodo.getCpf() < atual.getCpf()) {
             atual.setEsq(inserirNodo(atual.getEsq(), novoNodo));
             atual.getEsq().setPai(atual);
@@ -59,13 +93,11 @@ public class CadastroReserva {
     }
 
     private void corrigirInserir(Cliente nodo) {
-        Cliente pai, avo;
+        while (nodo != raiz && nodo.getPai() != null && nodo.getPai().getCor() == Cor.VERMELHO) {
+            Cliente pai = nodo.getPai();
+            Cliente avo = pai != null ? pai.getPai() : null;
 
-        while (nodo != raiz && nodo.getPai().getCor() == Cor.VERMELHO) {
-            pai = nodo.getPai();
-            avo = pai.getPai();
-
-            if (pai == avo.getEsq()) {
+            if (avo != null && pai == avo.getEsq()) {
                 Cliente tio = avo.getDir();
 
                 if (tio != null && tio.getCor() == Cor.VERMELHO) {
@@ -83,7 +115,7 @@ public class CadastroReserva {
                     avo.setCor(Cor.VERMELHO);
                     rotacaoDireita(avo);
                 }
-            } else {
+            } else if (avo != null) {
                 Cliente tio = avo.getEsq();
 
                 if (tio != null && tio.getCor() == Cor.VERMELHO) {
@@ -103,7 +135,9 @@ public class CadastroReserva {
                 }
             }
         }
-        raiz.setCor(Cor.PRETO);
+        if (raiz != null) {
+            raiz.setCor(Cor.PRETO);
+        }
     }
 
     private void rotacaoEsquerda(Cliente nodo) {
@@ -167,17 +201,60 @@ public class CadastroReserva {
 		}
 	}
 	
-	public void remover(int cpf) {
-	    Cliente clienteParaRemover = buscar(raiz, cpf);
-	    if (clienteParaRemover == null) {
+	public void cancelarReserva(int cpf) {
+	    Cliente clienteParaCancelar = buscar(raiz, cpf);
+	    if (clienteParaCancelar == null) {
 	        System.out.println("Cliente com CPF " + cpf + " não encontrado.");
 	        return;
 	    }
 
-	    // Remove o cliente da árvore
-	    raiz = removerNodo(raiz, clienteParaRemover);
-	    System.out.println("Reserva do cliente com CPF " + cpf + " foi cancelada.");
+	    // Cria uma cópia do cliente para adicionar ao histórico
+	    Cliente copiaParaHistorico = new Cliente(
+	        clienteParaCancelar.getCpf(),
+	        clienteParaCancelar.getQuarto(),
+	        clienteParaCancelar.getNome(),
+	        clienteParaCancelar.getCheckIn(),
+	        clienteParaCancelar.getCheckOut()
+	    );
+
+	    System.out.println("Adicionando ao histórico: " + clienteParaCancelar.getCpf());
+	    
+	    // Adiciona a cópia ao histórico
+	    raizHistorico = inserirNodo(raizHistorico, copiaParaHistorico);
+	    corrigirInserirHistorico(copiaParaHistorico);
+
+	    // Valida se o nó foi adicionado ao histórico
+	    if (buscar(raizHistorico, cpf) != null) {
+	        System.out.println("Reserva adicionada ao histórico com sucesso.");
+	    } else {
+	        System.out.println("Erro ao adicionar reserva ao histórico.");
+	    }
+
+	    // Remove a reserva da árvore principal
+	    raiz = removerNodo(raiz, clienteParaCancelar);
+	    System.out.println("Reserva do cliente com CPF " + cpf + " foi cancelada e movida para o histórico.");
 	}
+
+
+	
+	private void corrigirInserirHistorico(Cliente nodo) {
+	    corrigirInserir(nodo); // Reaproveitando a lógica da árvore principal
+	    
+	    // Garantindo que a raiz da árvore de histórico seja preta
+	    if (raizHistorico != null) {
+	        raizHistorico.setCor(Cor.PRETO);
+	    }
+	}
+
+	
+	public void mostrarHistorico() {
+        if (raizHistorico == null) {
+            System.out.println("O histórico de reservas canceladas está vazio.");
+        } else {
+            System.out.println("Histórico de Reservas Canceladas:");
+            mostrarArvoreRecursiva(raizHistorico, "", true);
+        }
+    }
 
 	private Cliente removerNodo(Cliente raiz, Cliente nodo) {
 	    if (raiz == null) {
@@ -318,5 +395,152 @@ public class CadastroReserva {
 	    }
 	    return buscar(nodo.getDir(), cpf);
 	}
+	
+	public void consultarReserva(int cpf) {
+	    Cliente resultado = buscar(raiz, cpf);
 
+	    if (resultado != null) {
+	        System.out.println("Reserva encontrada:");
+	        System.out.println("CPF: " + resultado.getCpf());
+	        System.out.println("Nome: " + resultado.getNome());
+	        System.out.println("Quarto: " + resultado.getQuarto().getNumQuarto());
+	        System.out.println("Check-in: " + resultado.getCheckIn());
+	        System.out.println("Check-out: " + resultado.getCheckOut());
+	    } else {
+	        System.out.println("Nenhuma reserva encontrada para o CPF: " + cpf);
+	    }
+	}
+	
+	// Método para listar quartos disponíveis
+    public List<Quarto> listarQuartosDisponiveis(LocalDate checkIn, LocalDate checkOut, Categoria categoria) {
+        List<Quarto> disponiveis = new ArrayList<>();
+
+        for (Quarto quarto : todosQuartos) {
+            if (quarto.getCategoria() == categoria &&
+                verificarDisponibilidade(quarto, checkIn, checkOut)) {
+                disponiveis.add(quarto);
+            }
+        }
+
+        return disponiveis;
+    }
+
+    // Exibe os quartos disponíveis
+    public void exibirQuartosDisponiveis(LocalDate checkIn, LocalDate checkOut, Categoria categoria) {
+        List<Quarto> disponiveis = listarQuartosDisponiveis(checkIn, checkOut, categoria);
+
+        if (disponiveis.isEmpty()) {
+            System.out.println("Nenhum quarto disponível para a categoria '" + categoria + "' no período solicitado.");
+        } else {
+            System.out.println("Quartos disponíveis:");
+            for (Quarto quarto : disponiveis) {
+                System.out.println("Quarto " + quarto.getNumQuarto() + " - Categoria: " + quarto.getCategoria());
+            }
+        }
+    }
+    
+    public void listarReservasPorDataCheckIn() {
+        if (raiz == null) {
+            System.out.println("Não há reservas para exibir.");
+            return;
+        }
+
+        // Obtem todas as reservas em uma lista
+        List<Cliente> reservas = new ArrayList<>();
+        coletarReservas(raiz, reservas);
+
+        // Ordena pela data de check-in
+        reservas = reservas.stream()
+                .sorted(Comparator.comparing(Cliente::getCheckIn))
+                .collect(Collectors.toList());
+
+        // Exibe as reservas ordenadas
+        System.out.println("Reservas ordenadas por data de check-in:");
+        for (Cliente cliente : reservas) {
+            System.out.printf(
+                "Cliente: %s, CPF: %d, Quarto: %d, Check-in: %s, Check-out: %s%n",
+                cliente.getNome(),
+                cliente.getCpf(),
+                cliente.getQuarto().getNumQuarto(),
+                cliente.getCheckIn(),
+                cliente.getCheckOut()
+            );
+        }
+    }
+
+    // Método auxiliar para coletar os nodos da árvore
+    private void coletarReservas(Cliente nodo, List<Cliente> reservas) {
+        if (nodo != null) {
+            coletarReservas(nodo.getEsq(), reservas);
+            reservas.add(nodo);
+            coletarReservas(nodo.getDir(), reservas);
+        }
+    }
+    
+    public double calcularTaxaOcupacao(LocalDate inicio, LocalDate fim) {
+        long totalQuartos = todosQuartos.size();
+        if (totalQuartos == 0) {
+            return 0.0;
+        }
+
+        long quartosOcupados = todosQuartos.stream()
+            .filter(quarto -> !verificarDisponibilidade(quarto, inicio, fim))
+            .count();
+
+        return (quartosOcupados / (double) totalQuartos) * 100;
+    }
+
+    public void quartosMaisEMenosReservados() {
+        List<Quarto> quartosReservados = new ArrayList<>();
+
+        // Adiciona todos os quartos reservados
+        adicionarQuartosReservados(raiz, quartosReservados);
+
+        // Calcula a frequência de cada quarto
+        var frequencia = quartosReservados.stream()
+            .collect(Collectors.groupingBy(Quarto::getNumQuarto, Collectors.counting()));
+
+        // Obtém os quartos mais e menos reservados
+        var maisReservado = frequencia.entrySet().stream()
+            .max(Comparator.comparingLong(e -> e.getValue()));
+
+        var menosReservado = frequencia.entrySet().stream()
+            .min(Comparator.comparingLong(e -> e.getValue()));
+
+        System.out.println("Quarto mais reservado: " +
+            (maisReservado.isPresent() ? maisReservado.get().getKey() + " com " + maisReservado.get().getValue() + " reservas" : "Nenhum"));
+        System.out.println("Quarto menos reservado: " +
+            (menosReservado.isPresent() ? menosReservado.get().getKey() + " com " + menosReservado.get().getValue() + " reservas" : "Nenhum"));
+    }
+
+    private void adicionarQuartosReservados(Cliente nodo, List<Quarto> quartosReservados) {
+        if (nodo != null) {
+            quartosReservados.add(nodo.getQuarto());
+            adicionarQuartosReservados(nodo.getEsq(), quartosReservados);
+            adicionarQuartosReservados(nodo.getDir(), quartosReservados);
+        }
+    }
+
+    public long calcularCancelamentos(LocalDate inicio, LocalDate fim) {
+        return contarCancelamentosNoPeriodo(raizHistorico, inicio, fim);
+    }
+
+    private long contarCancelamentosNoPeriodo(Cliente nodo, LocalDate inicio, LocalDate fim) {
+        if (nodo == null) {
+            return 0;
+        }
+
+        long cancelamentos = 0;
+
+        if (!nodo.getCheckOut().isBefore(inicio) && !nodo.getCheckIn().isAfter(fim)) {
+            cancelamentos++;
+        }
+
+        cancelamentos += contarCancelamentosNoPeriodo(nodo.getEsq(), inicio, fim);
+        cancelamentos += contarCancelamentosNoPeriodo(nodo.getDir(), inicio, fim);
+
+        return cancelamentos;
+    }
+
+    
 }
