@@ -9,13 +9,13 @@ import enums.Categoria;
 import enums.Cor;
 import nodo.Cliente;
 
-public class CadastroReserva {
+public class GerenciaReserva {
     private Cliente raiz;
     private Cliente raizHistorico;
     private List<Quarto> todosQuartos;
     private static final double TAXA_OCUPACAO_LIMITE = 0.9;
 
-    public CadastroReserva(List<Quarto> quartos) {
+    public GerenciaReserva(List<Quarto> quartos) {
         raiz = null;
         raizHistorico = null;
         this.todosQuartos = quartos;

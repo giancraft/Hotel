@@ -1,7 +1,7 @@
 package main;
 
 import enums.Categoria;
-import reservas.CadastroReserva;
+import reservas.GerenciaReserva;
 import reservas.Quarto;
 
 import java.time.LocalDate;
@@ -21,7 +21,7 @@ public class Main {
         quartos.add(new Quarto(102, Categoria.ECONOMICO));
         quartos.add(new Quarto(201, Categoria.LUXO));
         quartos.add(new Quarto(202, Categoria.LUXO));
-        CadastroReserva cadastroReserva = new CadastroReserva(quartos);
+        GerenciaReserva cadastroReserva = new GerenciaReserva(quartos);
 
         while (true) {
             System.out.println("\n--- Menu de Sistema de Reservas ---");
