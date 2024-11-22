@@ -248,13 +248,33 @@ public class CadastroReserva {
 
 	
 	public void mostrarHistorico() {
-        if (raizHistorico == null) {
-            System.out.println("O histórico de reservas canceladas está vazio.");
-        } else {
-            System.out.println("Histórico de Reservas Canceladas:");
-            mostrarArvoreRecursiva(raizHistorico, "", true);
-        }
-    }
+	    if (raizHistorico == null) {
+	        System.out.println("O histórico de reservas canceladas está vazio.");
+	    } else {
+	        System.out.println("Histórico de Reservas Canceladas:");
+	        mostrarHistoricoDetalhado(raizHistorico);
+	    }
+	}
+
+	// Método auxiliar para exibir o histórico detalhado
+	private void mostrarHistoricoDetalhado(Cliente nodo) {
+	    if (nodo != null) {
+	        // Exibe o cliente atual
+	        System.out.printf(
+	            "CPF: %d, Nome: %s, Quarto: %d, Check-in: %s, Check-out: %s%n",
+	            nodo.getCpf(),
+	            nodo.getNome(),
+	            nodo.getQuarto().getNumQuarto(),
+	            nodo.getCheckIn(),
+	            nodo.getCheckOut()
+	        );
+	        
+	        // Recursivamente exibe o histórico em ordem
+	        mostrarHistoricoDetalhado(nodo.getEsq());
+	        mostrarHistoricoDetalhado(nodo.getDir());
+	    }
+	}
+
 
 	private Cliente removerNodo(Cliente raiz, Cliente nodo) {
 	    if (raiz == null) {
