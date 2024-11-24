@@ -3,8 +3,11 @@ package reservas;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.Comparator;
+import java.util.HashSet;
+
 import enums.Categoria;
 import enums.Cor;
 import nodo.Cliente;
@@ -66,16 +69,29 @@ public class GerenciaReserva {
         }
 
         // Verifica se é o mesmo quarto e se há sobreposição de datas
-        if (nodo.getQuarto().getNumQuarto() == quarto.getNumQuarto() &&
-            !(checkOut.isBefore(nodo.getCheckIn()) || checkIn.isAfter(nodo.getCheckOut()))) {
-            return false; // Conflito encontrado
+        if (nodo.getQuarto() != null && nodo.getCheckIn() != null && nodo.getCheckOut() != null) {
+            // Verifica se há conflito com o quarto e o período
+            boolean conflito = nodo.getQuarto().getNumQuarto() == quarto.getNumQuarto() &&
+                               !(checkOut.isBefore(nodo.getCheckIn()) || checkIn.isAfter(nodo.getCheckOut()));
+
+            if (conflito) {
+                return false; // Conflito encontrado
+            }
         }
 
-        // Continua a busca em ambos os lados da árvore
-        return verificarDisponibilidadeRecursiva(nodo.getEsq(), quarto, checkIn, checkOut) &&
-               verificarDisponibilidadeRecursiva(nodo.getDir(), quarto, checkIn, checkOut);
-    }
+        // Verifica recursivamente os lados esquerdo e direito da árvore
+        boolean disponibilidadeEsquerda = true;
+        if (nodo.getEsq() != null) {
+            disponibilidadeEsquerda = verificarDisponibilidadeRecursiva(nodo.getEsq(), quarto, checkIn, checkOut);
+        }
 
+        boolean disponibilidadeDireita = true;
+        if (nodo.getDir() != null) {
+            disponibilidadeDireita = verificarDisponibilidadeRecursiva(nodo.getDir(), quarto, checkIn, checkOut);
+        }
+
+        return disponibilidadeEsquerda && disponibilidadeDireita;
+    }
 
     private Cliente inserirNodo(Cliente atual, Cliente novoNodo) {
         if (atual == null) {
@@ -216,19 +232,10 @@ public class GerenciaReserva {
 	        clienteParaCancelar.getCheckIn(),
 	        clienteParaCancelar.getCheckOut()
 	    );
-
-	    System.out.println("Adicionando ao histórico: " + clienteParaCancelar.getCpf());
 	    
 	    // Adiciona a cópia ao histórico
 	    raizHistorico = inserirNodo(raizHistorico, copiaParaHistorico);
 	    corrigirInserirHistorico(copiaParaHistorico);
-
-	    // Valida se o nó foi adicionado ao histórico
-	    if (buscar(raizHistorico, cpf) != null) {
-	        System.out.println("Reserva adicionada ao histórico com sucesso.");
-	    } else {
-	        System.out.println("Erro ao adicionar reserva ao histórico.");
-	    }
 
 	    // Remove a reserva da árvore principal
 	    raiz = removerNodo(raiz, clienteParaCancelar);
@@ -321,29 +328,25 @@ public class GerenciaReserva {
 	}
 
 	private Cliente corrigirRemocao(Cliente nodo) {
-	    if (nodo == null) {
-	        return null;
-	    }
-
-	    while (nodo != raiz && nodo.getCor() == Cor.PRETO) {
+	    while (nodo != raiz && (nodo == null || nodo.getCor() == Cor.PRETO)) {
 	        Cliente pai = nodo.getPai();
-
 	        if (nodo == pai.getEsq()) {
 	            Cliente irmao = pai.getDir();
-
-	            if (irmao.getCor() == Cor.VERMELHO) {
+	            if (irmao != null && irmao.getCor() == Cor.VERMELHO) {
 	                irmao.setCor(Cor.PRETO);
 	                pai.setCor(Cor.VERMELHO);
 	                rotacaoEsquerda(pai);
 	                irmao = pai.getDir();
 	            }
-
-	            if ((irmao.getEsq() == null || irmao.getEsq().getCor() == Cor.PRETO) &&
+	            if (irmao == null || 
+	                (irmao.getEsq() == null || irmao.getEsq().getCor() == Cor.PRETO) &&
 	                (irmao.getDir() == null || irmao.getDir().getCor() == Cor.PRETO)) {
-	                irmao.setCor(Cor.VERMELHO);
+	                if (irmao != null) {
+	                    irmao.setCor(Cor.VERMELHO);
+	                }
 	                nodo = pai;
 	            } else {
-	                if (irmao.getDir() == null || irmao.getDir().getCor() == Cor.PRETO) {
+	                if (irmao != null && (irmao.getDir() == null || irmao.getDir().getCor() == Cor.PRETO)) {
 	                    if (irmao.getEsq() != null) {
 	                        irmao.getEsq().setCor(Cor.PRETO);
 	                    }
@@ -351,31 +354,33 @@ public class GerenciaReserva {
 	                    rotacaoDireita(irmao);
 	                    irmao = pai.getDir();
 	                }
-
-	                irmao.setCor(pai.getCor());
-	                pai.setCor(Cor.PRETO);
-	                if (irmao.getDir() != null) {
-	                    irmao.getDir().setCor(Cor.PRETO);
+	                if (irmao != null) {
+	                    irmao.setCor(pai.getCor());
+	                    if (irmao.getDir() != null) {
+	                        irmao.getDir().setCor(Cor.PRETO);
+	                    }
 	                }
+	                pai.setCor(Cor.PRETO);
 	                rotacaoEsquerda(pai);
 	                nodo = raiz;
 	            }
 	        } else {
 	            Cliente irmao = pai.getEsq();
-
-	            if (irmao.getCor() == Cor.VERMELHO) {
+	            if (irmao != null && irmao.getCor() == Cor.VERMELHO) {
 	                irmao.setCor(Cor.PRETO);
 	                pai.setCor(Cor.VERMELHO);
 	                rotacaoDireita(pai);
 	                irmao = pai.getEsq();
 	            }
-
-	            if ((irmao.getEsq() == null || irmao.getEsq().getCor() == Cor.PRETO) &&
-	                (irmao.getDir() == null || irmao.getDir().getCor() == Cor.PRETO)) {
-	                irmao.setCor(Cor.VERMELHO);
+	            if (irmao == null || 
+	                (irmao.getDir() == null || irmao.getDir().getCor() == Cor.PRETO) &&
+	                (irmao.getEsq() == null || irmao.getEsq().getCor() == Cor.PRETO)) {
+	                if (irmao != null) {
+	                    irmao.setCor(Cor.VERMELHO);
+	                }
 	                nodo = pai;
 	            } else {
-	                if (irmao.getEsq() == null || irmao.getEsq().getCor() == Cor.PRETO) {
+	                if (irmao != null && (irmao.getEsq() == null || irmao.getEsq().getCor() == Cor.PRETO)) {
 	                    if (irmao.getDir() != null) {
 	                        irmao.getDir().setCor(Cor.PRETO);
 	                    }
@@ -383,21 +388,24 @@ public class GerenciaReserva {
 	                    rotacaoEsquerda(irmao);
 	                    irmao = pai.getEsq();
 	                }
-
-	                irmao.setCor(pai.getCor());
-	                pai.setCor(Cor.PRETO);
-	                if (irmao.getEsq() != null) {
-	                    irmao.getEsq().setCor(Cor.PRETO);
+	                if (irmao != null) {
+	                    irmao.setCor(pai.getCor());
+	                    if (irmao.getEsq() != null) {
+	                        irmao.getEsq().setCor(Cor.PRETO);
+	                    }
 	                }
+	                pai.setCor(Cor.PRETO);
 	                rotacaoDireita(pai);
 	                nodo = raiz;
 	            }
 	        }
 	    }
-
-	    nodo.setCor(Cor.PRETO);
+	    if (nodo != null) {
+	        nodo.setCor(Cor.PRETO);
+	    }
 	    return nodo;
 	}
+
 
 	private Cliente obterMinimo(Cliente nodo) {
 	    while (nodo.getEsq() != null) {
@@ -500,11 +508,11 @@ public class GerenciaReserva {
     public double calcularTaxaOcupacao(LocalDate inicio, LocalDate fim) {
         long totalQuartos = todosQuartos.size();
         if (totalQuartos == 0) {
-            return 0.0;
+            return 0.0; // Sem quartos disponíveis
         }
 
         long quartosOcupados = todosQuartos.stream()
-            .filter(quarto -> !verificarDisponibilidade(quarto, inicio, fim))
+            .filter(quarto -> quarto != null && !verificarDisponibilidade(quarto, inicio, fim))
             .count();
 
         return (quartosOcupados / (double) totalQuartos) * 100;
@@ -534,11 +542,22 @@ public class GerenciaReserva {
     }
 
     private void adicionarQuartosReservados(Cliente nodo, List<Quarto> quartosReservados) {
-        if (nodo != null) {
-            quartosReservados.add(nodo.getQuarto());
-            adicionarQuartosReservados(nodo.getEsq(), quartosReservados);
-            adicionarQuartosReservados(nodo.getDir(), quartosReservados);
+        adicionarQuartosReservadosHelper(nodo, quartosReservados, new HashSet<>());
+    }
+
+    private void adicionarQuartosReservadosHelper(Cliente nodo, List<Quarto> quartosReservados, Set<Cliente> visitados) {
+        if (nodo == null || visitados.contains(nodo)) {
+            return;
         }
+
+        visitados.add(nodo);
+
+        if (nodo.getQuarto() != null) {
+            quartosReservados.add(nodo.getQuarto());
+        }
+
+        adicionarQuartosReservadosHelper(nodo.getEsq(), quartosReservados, visitados);
+        adicionarQuartosReservadosHelper(nodo.getDir(), quartosReservados, visitados);
     }
 
     public long calcularCancelamentos(LocalDate inicio, LocalDate fim) {
@@ -561,6 +580,4 @@ public class GerenciaReserva {
 
         return cancelamentos;
     }
-
-    
 }
